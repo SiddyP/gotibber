@@ -2,9 +2,21 @@ package tibber
 
 import "time"
 
+type UserResponse struct {
+	Viewer struct {
+		Name string `json:"name"`
+	}
+}
+
+type WebsocketSubscriptionUrlResponse struct {
+	Viewer struct {
+		Url string `json:"websocketSubscriptionUrl"`
+	} `json:"viewer"`
+}
+
 type HomeConsumptionResponse struct {
 	Viewer struct {
-		Home struct {
+		Homes []struct {
 			Consumption struct {
 				Nodes []struct {
 					From            time.Time `json:"from"`
@@ -16,6 +28,6 @@ type HomeConsumptionResponse struct {
 					Consumption     float64   `json:"consumption"`
 				} `json:"nodes"`
 			} `json:"consumption"`
-		} `json:"home"`
+		} `json:"homes"`
 	} `json:"viewer"`
 }
