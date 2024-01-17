@@ -1,7 +1,7 @@
 # gotibber
 Query the tibber GraphQL API in a request/response fashion or setup a websocket connection to consume live measurements.
 
-Websocket/streaming data requires a meter like the Tibber Pulse or Watty connected to the serial port (P1-port) of your powermeter.
+Websocket/streaming data requires a meter like the Tibber Pulse or Watty connected to the serial port (P1-port) of your powermeter. This repo uses the `graphql-transport-ws` sub-protocol for handling the subscription. 
 
 ## env
 Provide your tibber details trough e.g. environment variables 
