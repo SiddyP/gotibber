@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestTibberClient(t *testing.T) {
+func TestCreateTibberClient(t *testing.T) {
 	assert := assert.New(t)
 
 	tC := Client{

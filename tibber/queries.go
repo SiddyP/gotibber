@@ -16,6 +16,9 @@ type Consumption struct {
 	Last       int
 }
 
+type Price struct {
+}
+
 type WebsocketSubscriptionUrl struct {
 }
 
@@ -90,4 +93,44 @@ func (q *Consumption) query(ctx context.Context, t *Client) HomeConsumptionRespo
 		log.Fatal(err)
 	}
 	return h
+}
+
+func (p *Price) query(ctx context.Context, t *Client) PriceResponse {
+	req := graphql.NewRequest(`
+		query {
+				viewer {
+				homes {
+					currentSubscription{
+					priceInfo{
+						current{
+						total
+						energy
+						tax
+						startsAt
+						}
+						today {
+						total
+						energy
+						tax
+						startsAt
+						}
+						tomorrow {
+						total
+						energy
+						tax
+						startsAt
+						}
+					}
+					}
+				}
+			}
+		}
+		`)
+	setHeaders(req, t)
+
+	var price PriceResponse
+	if err := t.APIClient.GQLClient.Run(ctx, req, &price); err != nil {
+		log.Fatal(err)
+	}
+	return price
 }

@@ -32,6 +32,10 @@ func (t *Client) QueryWebsocketSubscriptionUrl(ctx context.Context, w *Websocket
 	return w.query(ctx, t)
 }
 
+func (t *Client) QueryPrice(ctx context.Context, p *Price) PriceResponse {
+	return p.query(ctx, t)
+}
+
 // Subscribe to Tibber websocket
 func (t *Client) Subscribe(ctx context.Context) {
 	defer t.Wg.Done()

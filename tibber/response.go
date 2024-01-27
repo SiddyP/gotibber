@@ -31,3 +31,32 @@ type HomeConsumptionResponse struct {
 		} `json:"homes"`
 	} `json:"viewer"`
 }
+
+type PriceResponse struct {
+	Viewer struct {
+		Homes []struct {
+			CurrentSubscription struct {
+				PriceInfo struct {
+					Today []struct {
+						StartsAt time.Time `json:"startsAt"`
+						Total    float64   `json:"total"`
+						Energy   float64   `json:"energy"`
+						Tax      float64   `json:"tax"`
+					} `json:"today"`
+					Tomorrow []struct {
+						StartsAt time.Time `json:"startsAt"`
+						Total    float64   `json:"total"`
+						Energy   float64   `json:"energy"`
+						Tax      float64   `json:"tax"`
+					} `json:"tomorrow"`
+					Current struct {
+						StartsAt time.Time `json:"startsAt"`
+						Total    float64   `json:"total"`
+						Energy   float64   `json:"energy"`
+						Tax      float64   `json:"tax"`
+					} `json:"current"`
+				} `json:"priceInfo"`
+			} `json:"currentSubscription"`
+		} `json:"homes"`
+	} `json:"viewer"`
+}
