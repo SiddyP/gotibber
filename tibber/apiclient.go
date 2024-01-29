@@ -1,8 +1,14 @@
 package tibber
 
 import (
+	"context"
+
 	"github.com/machinebox/graphql"
 )
+
+type APIClienter interface {
+	Run(ctx context.Context, req *graphql.Request, resp interface{}) error
+}
 
 type APIConfig struct {
 	Token string
@@ -29,4 +35,9 @@ func NewAPIClient(config *APIConfig) *APIClient {
 		GQLClient: graphql.NewClient(config.URL),
 	}
 	return client
+}
+
+func (c *APIClient) Run(ctx context.Context, req *graphql.Request, resp interface{}) error {
+	req.Header.Set("Authorization", "Bearer "+c.Config.Token)
+	return c.GQLClient.Run(ctx, req, resp)
 }

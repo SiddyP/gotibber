@@ -10,7 +10,7 @@ import (
 )
 
 type Client struct {
-	APIClient       *APIClient
+	APIClient       APIClienter
 	DBConn          *pgx.Conn
 	Logger          *slog.Logger
 	WebsocketClient *WebsocketClient
@@ -28,9 +28,9 @@ func (t *Client) QueryConsumption(ctx context.Context, c *Consumption) HomeConsu
 	return c.query(ctx, t)
 }
 
-func (t *Client) QueryWebsocketSubscriptionUrl(ctx context.Context, w *WebsocketSubscriptionUrl) WebsocketSubscriptionUrlResponse {
-	return w.query(ctx, t)
-}
+// func (t *Client) QueryWebsocketSubscriptionUrl(ctx context.Context, w *WebsocketSubscriptionUrl) WebsocketSubscriptionUrlResponse {
+// 	return w.query(ctx, t)
+// }
 
 func (t *Client) QueryPrice(ctx context.Context, p *Price) PriceResponse {
 	return p.query(ctx, t)
