@@ -92,7 +92,7 @@ func connection_init(t *Client, c *websocket.Conn) error {
 	m := InitMessage{
 		Type: "connection_init",
 		Payload: Payload{
-			Token: t.APIClient.Config.Token,
+			Token: t.WebsocketClient.Config.Token,
 		},
 	}
 	err := c.WriteJSON(m)
@@ -162,7 +162,7 @@ func socketConnection(sctx context.Context, t *Client) {
 	logger.Info("connecting to", "url", u.String())
 
 	h := http.Header{}
-	h.Set("Authorization", "Bearer "+t.APIClient.Config.Token)
+	h.Set("Authorization", "Bearer "+t.WebsocketClient.Config.Token)
 	h.Set("User-Agent", "REST github.com/SiddyP/gotibber/v1.0.0")
 	h.Set("Sec-Websocket-Protocol", "graphql-transport-ws")
 	h.Set("Accept-Encoding", "gzip, deflate, br")
