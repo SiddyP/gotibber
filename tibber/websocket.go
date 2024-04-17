@@ -163,7 +163,7 @@ func socketConnection(sctx context.Context, t *Client) {
 
 	h := http.Header{}
 	h.Set("Authorization", "Bearer "+t.WebsocketClient.Config.Token)
-	h.Set("User-Agent", "REST github.com/SiddyP/gotibber/v1.0.0")
+	h.Set("User-Agent", "REST github.com/SiddyP/gotibber/v0.3.0")
 	h.Set("Sec-Websocket-Protocol", "graphql-transport-ws")
 	h.Set("Accept-Encoding", "gzip, deflate, br")
 
