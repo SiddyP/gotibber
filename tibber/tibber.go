@@ -10,7 +10,7 @@ import (
 )
 
 type Client struct {
-	APIClient       *APIClient
+	APIClient       GQLClienter
 	DBConn          *pgx.Conn
 	Logger          *slog.Logger
 	WebsocketClient *WebsocketClient
@@ -18,6 +18,15 @@ type Client struct {
 }
 
 type SubscriptionId struct{}
+
+func NewClient(c GQLClienter, l *slog.Logger, w *WebsocketClient, wg *sync.WaitGroup) *Client {
+	return &Client{
+		APIClient:       c,
+		Logger:          l,
+		WebsocketClient: w,
+		Wg:              wg,
+	}
+}
 
 // Query Tibber API
 func (t *Client) QueryUser(ctx context.Context, u *User) UserResponse {
