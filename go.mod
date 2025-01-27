@@ -1,6 +1,6 @@
 module github.com/SiddyP/gotibber
 
-go 1.21.5
+go 1.22.11
 
 require (
 	github.com/google/uuid v1.5.0
