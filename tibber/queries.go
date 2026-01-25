@@ -16,7 +16,15 @@ type Consumption struct {
 	Last       int
 }
 
+type PriceInfoResolution string
+
+const (
+	PriceInfoResolutionHourly        PriceInfoResolution = "HOURLY"
+	PriceInfoResolutionQuarterHourly PriceInfoResolution = "QUARTER_HOURLY"
+)
+
 type Price struct {
+	Resolution PriceInfoResolution
 }
 
 type WebsocketSubscriptionUrl struct {
@@ -88,35 +96,38 @@ func (q *Consumption) query(ctx context.Context, t *Client) HomeConsumptionRespo
 
 func (p *Price) query(ctx context.Context, t *Client) PriceResponse {
 	req := graphql.NewRequest(`
-		query {
-				viewer {
+		query ($resolution: PriceInfoResolution) {
+			viewer {
 				homes {
 					currentSubscription{
-					priceInfo{
-						current{
-						total
-						energy
-						tax
-						startsAt
+						priceInfo(resolution: $resolution){
+							current{
+								total
+								energy
+								tax
+								startsAt
+							}
+							today {
+								total
+								energy
+								tax
+								startsAt
+							}
+							tomorrow {
+								total
+								energy
+								tax
+								startsAt
+							}
 						}
-						today {
-						total
-						energy
-						tax
-						startsAt
-						}
-						tomorrow {
-						total
-						energy
-						tax
-						startsAt
-						}
-					}
 					}
 				}
 			}
 		}
 	`)
+	if p.Resolution != "" {
+		req.Var("resolution", p.Resolution)
+	}
 	var price PriceResponse
 	if err := t.APIClient.Run(ctx, req, &price); err != nil {
 		log.Fatal(err)

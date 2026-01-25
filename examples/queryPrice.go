@@ -21,7 +21,9 @@ func queryPriceExample() {
 		Logger: slog.Default(),
 	}
 
-	p := t.QueryPrice(ctx, &tibber.Price{})
+	p := t.QueryPrice(ctx, &tibber.Price{
+		Resolution: tibber.PriceInfoResolutionQuarterHourly,
+	})
 
 	fmt.Printf("Price: %v\n", p.Viewer.Homes)
 }
