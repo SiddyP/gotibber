@@ -6,12 +6,12 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Client struct {
 	APIClient       GQLClienter
-	DBConn          *pgx.Conn
+	DBConn          *pgxpool.Pool
 	Logger          *slog.Logger
 	WebsocketClient *WebsocketClient
 	Wg              *sync.WaitGroup
