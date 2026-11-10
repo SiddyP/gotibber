@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
 
@@ -21,9 +22,14 @@ func queryPriceExample() {
 		Logger: slog.Default(),
 	}
 
-	p := t.QueryPrice(ctx, &tibber.Price{
+	p, err := t.QueryHomePrice(ctx, &tibber.HomePrice{
+		HomeId:     os.Getenv("TIBBER_HOUSE_ID"),
 		Resolution: tibber.PriceInfoResolutionQuarterHourly,
 	})
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	fmt.Printf("Price: %v\n", p.Viewer.Homes)
+	fmt.Printf("Current price: %v, today: %d prices, tomorrow: %d prices\n",
+		p.Current.Total, len(p.Today), len(p.Tomorrow))
 }

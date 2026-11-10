@@ -41,7 +41,18 @@ func (t *Client) QueryWebsocketSubscriptionUrl(ctx context.Context, w *Websocket
 	return w.query(ctx, t)
 }
 
+// QueryPrice returns price info for every home on the account, in API order.
+//
+// Deprecated: the account can contain homes without a subscription (empty
+// price info), and they may be listed first. Use QueryHomePrice instead.
 func (t *Client) QueryPrice(ctx context.Context, p *Price) PriceResponse {
+	return p.query(ctx, t)
+}
+
+// QueryHomePrice returns today's, tomorrow's and the current price for the
+// home p.HomeId. It returns an error if the request fails or the home has no
+// current subscription.
+func (t *Client) QueryHomePrice(ctx context.Context, p *HomePrice) (PriceInfo, error) {
 	return p.query(ctx, t)
 }
 

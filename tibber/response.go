@@ -32,31 +32,42 @@ type HomeConsumptionResponse struct {
 	} `json:"viewer"`
 }
 
+// PricePoint is the price for one interval (an hour or a quarter-hour,
+// depending on the requested PriceInfoResolution).
+type PricePoint struct {
+	StartsAt time.Time `json:"startsAt"`
+	Total    float64   `json:"total"`
+	Energy   float64   `json:"energy"`
+	Tax      float64   `json:"tax"`
+}
+
+type PriceInfo struct {
+	Today    []PricePoint `json:"today"`
+	Tomorrow []PricePoint `json:"tomorrow"`
+	Current  PricePoint   `json:"current"`
+}
+
 type PriceResponse struct {
 	Viewer struct {
 		Homes []struct {
 			CurrentSubscription struct {
-				PriceInfo struct {
-					Today []struct {
-						StartsAt time.Time `json:"startsAt"`
-						Total    float64   `json:"total"`
-						Energy   float64   `json:"energy"`
-						Tax      float64   `json:"tax"`
-					} `json:"today"`
-					Tomorrow []struct {
-						StartsAt time.Time `json:"startsAt"`
-						Total    float64   `json:"total"`
-						Energy   float64   `json:"energy"`
-						Tax      float64   `json:"tax"`
-					} `json:"tomorrow"`
-					Current struct {
-						StartsAt time.Time `json:"startsAt"`
-						Total    float64   `json:"total"`
-						Energy   float64   `json:"energy"`
-						Tax      float64   `json:"tax"`
-					} `json:"current"`
-				} `json:"priceInfo"`
+				PriceInfo PriceInfo `json:"priceInfo"`
 			} `json:"currentSubscription"`
 		} `json:"homes"`
+	} `json:"viewer"`
+}
+
+// homePriceResponse is the raw shape of the HomePrice query. CurrentSubscription
+// is a pointer so a home without a subscription (null) can be told apart from
+// one whose price lists happen to be empty.
+type homePriceResponse struct {
+	Viewer struct {
+		Home struct {
+			Id                  string `json:"id"`
+			CurrentSubscription *struct {
+				Status    string    `json:"status"`
+				PriceInfo PriceInfo `json:"priceInfo"`
+			} `json:"currentSubscription"`
+		} `json:"home"`
 	} `json:"viewer"`
 }

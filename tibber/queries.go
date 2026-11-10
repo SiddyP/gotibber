@@ -2,6 +2,8 @@ package tibber
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 
 	"github.com/machinebox/graphql"
@@ -24,6 +26,12 @@ const (
 )
 
 type Price struct {
+	Resolution PriceInfoResolution
+}
+
+// HomePrice requests price info for a single home, selected by its id.
+type HomePrice struct {
+	HomeId     string
 	Resolution PriceInfoResolution
 }
 
@@ -133,4 +141,55 @@ func (p *Price) query(ctx context.Context, t *Client) PriceResponse {
 		log.Fatal(err)
 	}
 	return price
+}
+
+func (p *HomePrice) query(ctx context.Context, t *Client) (PriceInfo, error) {
+	if p.HomeId == "" {
+		return PriceInfo{}, errors.New("HomePrice.HomeId not set")
+	}
+	req := graphql.NewRequest(`
+		query ($homeId: ID!, $resolution: PriceInfoResolution) {
+			viewer {
+				home(id: $homeId) {
+					id
+					currentSubscription {
+						status
+						priceInfo(resolution: $resolution) {
+							current {
+								total
+								energy
+								tax
+								startsAt
+							}
+							today {
+								total
+								energy
+								tax
+								startsAt
+							}
+							tomorrow {
+								total
+								energy
+								tax
+								startsAt
+							}
+						}
+					}
+				}
+			}
+		}
+	`)
+	req.Var("homeId", p.HomeId)
+	if p.Resolution != "" {
+		req.Var("resolution", p.Resolution)
+	}
+	var resp homePriceResponse
+	if err := t.APIClient.Run(ctx, req, &resp); err != nil {
+		return PriceInfo{}, fmt.Errorf("query prices for home %s: %w", p.HomeId, err)
+	}
+	sub := resp.Viewer.Home.CurrentSubscription
+	if sub == nil {
+		return PriceInfo{}, fmt.Errorf("home %s has no current subscription", p.HomeId)
+	}
+	return sub.PriceInfo, nil
 }

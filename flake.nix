@@ -1,5 +1,5 @@
 {
-  description = "A shell with go 1.21";
+  description = "A shell with go 1.27";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
@@ -16,7 +16,7 @@
       {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
-            go_1_22
+            go_1_27
             go-tools
             delve
           ];

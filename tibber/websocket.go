@@ -3,7 +3,9 @@ package tibber
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"time"
@@ -88,6 +90,37 @@ func NewCompletedMessage(id string) CompletedMessage {
 	}
 }
 
+const (
+	userAgent = "REST github.com/SiddyP/gotibber/v0.6.0"
+
+	defaultReadTimeout = 90 * time.Second
+	defaultMinBackoff  = 5 * time.Second
+	defaultMaxBackoff  = 5 * time.Minute
+	writeTimeout       = 10 * time.Second
+)
+
+// serverMessage is a graphql-transport-ws message received from the server.
+type serverMessage struct {
+	Id      string          `json:"id"`
+	Type    string          `json:"type"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+// nextPayload is the payload of a "next" message.
+type nextPayload struct {
+	Data   Data `json:"data"`
+	Errors []struct {
+		Message string `json:"message"`
+	} `json:"errors"`
+}
+
+func writeJSON(c *websocket.Conn, v any) error {
+	if err := c.SetWriteDeadline(time.Now().Add(writeTimeout)); err != nil {
+		return err
+	}
+	return c.WriteJSON(v)
+}
+
 func connection_init(t *Client, c *websocket.Conn) error {
 	m := InitMessage{
 		Type: "connection_init",
@@ -95,12 +128,7 @@ func connection_init(t *Client, c *websocket.Conn) error {
 			Token: t.WebsocketClient.Config.Token,
 		},
 	}
-	err := c.WriteJSON(m)
-	if err != nil {
-		t.Logger.Error("connection_init", "error", err)
-		return err
-	}
-	return nil
+	return writeJSON(c, m)
 }
 
 func subscribe(sctx context.Context, t *Client, c *websocket.Conn) error {
@@ -117,7 +145,7 @@ func subscribe(sctx context.Context, t *Client, c *websocket.Conn) error {
 		return fmt.Errorf("error: %v", err)
 	}
 	t.Logger.Info("subscribing..", "gqlQuery", s)
-	err = c.WriteJSON(s)
+	err = writeJSON(c, s)
 	if err != nil {
 		return fmt.Errorf("error: %v", err)
 	}
@@ -129,6 +157,36 @@ type WebsocketConfig struct {
 	Host  string
 	Path  string
 	Id    string
+
+	// Optional. Zero values fall back to the defaults.
+	Dialer      *websocket.Dialer // default websocket.DefaultDialer
+	ReadTimeout time.Duration     // reconnect if nothing arrives for this long (default 90s)
+	MinBackoff  time.Duration     // first reconnect delay (default 5s)
+	MaxBackoff  time.Duration     // cap for the exponential reconnect delay (default 5m)
+}
+
+func (w *WebsocketConfig) dialer() *websocket.Dialer {
+	if w.Dialer != nil {
+		return w.Dialer
+	}
+	return websocket.DefaultDialer
+}
+
+func orDefault(d, def time.Duration) time.Duration {
+	if d > 0 {
+		return d
+	}
+	return def
+}
+
+func (w *WebsocketConfig) readTimeout() time.Duration {
+	return orDefault(w.ReadTimeout, defaultReadTimeout)
+}
+func (w *WebsocketConfig) minBackoff() time.Duration {
+	return orDefault(w.MinBackoff, defaultMinBackoff)
+}
+func (w *WebsocketConfig) maxBackoff() time.Duration {
+	return orDefault(w.MaxBackoff, defaultMaxBackoff)
 }
 
 type WebsocketClient struct {
@@ -154,80 +212,115 @@ func NewWebsocketConfig(w *WebsocketConfig) *WebsocketConfig {
 	return w
 }
 
+// socketConnection keeps the liveMeasurement subscription alive until sctx is
+// cancelled. Whenever a connection fails (dial error, server restart, read
+// timeout, ...) it reconnects after an exponential, jittered backoff that
+// resets once a connection has delivered data. It closes
+// t.WebsocketClient.Data before returning.
 func socketConnection(sctx context.Context, t *Client) {
+	defer close(t.WebsocketClient.Data)
+	cfg := t.WebsocketClient.Config
+
+	backoff := cfg.minBackoff()
+	for {
+		gotData, err := runSubscription(sctx, t)
+		if sctx.Err() != nil {
+			t.Logger.Info("ctx.Done() websocket closed")
+			return
+		}
+		if gotData {
+			backoff = cfg.minBackoff()
+		}
+		// Jitter within [backoff/2, backoff] so clients don't all reconnect at
+		// the same instant after a Tibber server restart.
+		wait := backoff/2 + rand.N(backoff/2+1)
+		t.Logger.Warn("websocket disconnected, reconnecting", "error", err, "retry_in", wait.String())
+		select {
+		case <-sctx.Done():
+			t.Logger.Info("ctx.Done() websocket closed")
+			return
+		case <-time.After(wait):
+		}
+		backoff = min(2*backoff, cfg.maxBackoff())
+	}
+}
+
+// runSubscription runs a single connection: dial, connection_init, subscribe
+// on connection_ack, then forward liveMeasurements to t.WebsocketClient.Data
+// until the connection fails or sctx is cancelled. It never reads from a
+// connection after a read error. It reports whether any measurement was
+// forwarded.
+func runSubscription(sctx context.Context, t *Client) (gotData bool, err error) {
 	logger := t.Logger
+	cfg := t.WebsocketClient.Config
 
-	u := url.URL{Scheme: "wss", Host: t.WebsocketClient.Config.Host, Path: t.WebsocketClient.Config.Path}
-
-	logger.Info("connecting to", "url", u.String())
-
+	u := url.URL{Scheme: "wss", Host: cfg.Host, Path: cfg.Path}
 	h := http.Header{}
-	h.Set("Authorization", "Bearer "+t.WebsocketClient.Config.Token)
-	h.Set("User-Agent", "REST github.com/SiddyP/gotibber/v0.4.0")
+	h.Set("Authorization", "Bearer "+cfg.Token)
+	h.Set("User-Agent", userAgent)
 	h.Set("Sec-Websocket-Protocol", "graphql-transport-ws")
 	h.Set("Accept-Encoding", "gzip, deflate, br")
 
-	c, _, err := websocket.DefaultDialer.Dial(u.String(), h)
+	logger.Info("connecting to", "url", u.String())
+	c, _, err := cfg.dialer().DialContext(sctx, u.String(), h)
 	if err != nil {
-		logger.Error("dial:", "error", err)
+		return false, fmt.Errorf("dial: %w", err)
 	}
 	defer c.Close()
 
-	err = connection_init(t, c)
-	if err != nil {
-		logger.Error("connection_init", "error", err)
+	// Reads block; on cancellation send a close frame and close the
+	// connection so the read loop below returns promptly. WriteControl and
+	// Close are safe to call concurrently with the reader/writer.
+	stop := context.AfterFunc(sctx, func() {
+		_ = c.WriteControl(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
+			time.Now().Add(time.Second))
+		c.Close()
+	})
+	defer stop()
+
+	if err := connection_init(t, c); err != nil {
+		return false, fmt.Errorf("connection_init: %w", err)
 	}
 
-	// listener
-	t.Wg.Add(1)
-	go func() {
-		defer t.Wg.Done()
-		for {
-			select {
-			case <-sctx.Done():
-				logger.Info("ctx.Done() shutting down listener")
-				close(t.WebsocketClient.Data)
-				return
-			default:
-				var m map[string]interface{}
-				err = c.ReadJSON(&m)
-				if err != nil {
-					logger.Error("c.ReadJSON", "error", err)
-				}
-				switch msgType := m["type"]; msgType {
-				case "connection_ack":
-					err := subscribe(sctx, t, c)
-					if err != nil {
-						logger.Error("subscribe", "error", err)
-					}
-				case "next":
-					streamingResp := StreamingQueryResponse{}
-
-					jsonData, err := json.Marshal(m)
-					if err != nil {
-						fmt.Println("Error:", err)
-					}
-
-					err = json.Unmarshal(jsonData, &streamingResp)
-					if err != nil {
-						fmt.Println("Error:", err)
-					}
-					t.WebsocketClient.Data <- streamingResp.Payload.Data.LiveMeasurement
-				}
-			}
-		}
-	}()
-
 	for {
-		select {
-		case <-sctx.Done():
-			completedMessage := NewCompletedMessage(sctx.Value(SubscriptionId{}).(string))
-			err = c.WriteJSON(completedMessage)
-			if err != nil {
-				logger.Error("<-interrupt", "error", err)
+		if err := c.SetReadDeadline(time.Now().Add(cfg.readTimeout())); err != nil {
+			return gotData, fmt.Errorf("set read deadline: %w", err)
+		}
+		var msg serverMessage
+		if err := c.ReadJSON(&msg); err != nil {
+			return gotData, fmt.Errorf("read: %w", err)
+		}
+
+		switch msg.Type {
+		case "connection_ack":
+			if err := subscribe(sctx, t, c); err != nil {
+				return gotData, fmt.Errorf("subscribe: %w", err)
 			}
-			logger.Info("ctx.Done()! closing channel and and websocket.", "completedMessage", completedMessage)
-			return
+		case "ping":
+			if err := writeJSON(c, map[string]string{"type": "pong"}); err != nil {
+				return gotData, fmt.Errorf("pong: %w", err)
+			}
+		case "next":
+			var p nextPayload
+			if err := json.Unmarshal(msg.Payload, &p); err != nil {
+				logger.Error("decode next payload", "error", err)
+				continue
+			}
+			if len(p.Errors) > 0 {
+				logger.Error("liveMeasurement returned errors", "errors", fmt.Sprint(p.Errors))
+				continue
+			}
+			select {
+			case t.WebsocketClient.Data <- p.Data.LiveMeasurement:
+				gotData = true
+			case <-sctx.Done():
+				return gotData, sctx.Err()
+			}
+		case "error":
+			return gotData, fmt.Errorf("subscription error: %s", msg.Payload)
+		case "complete":
+			return gotData, errors.New("server completed the subscription")
 		}
 	}
 }
